@@ -98,7 +98,6 @@ class PackingFlow extends GraphStage[FlowShape[(Band, Pack), Seq[Pack]]] {
           grabin._1 match {
             case b: TopBand =>
               queue.setSize(b.order.count.value)
-              println(s"${b.order.count.value} pack(s) ordered [${"%010d".format(b.order.number.value)}]")
             case _ =>
               ()
           }
@@ -121,10 +120,12 @@ object Main extends App {
 
 //  lazy private val order: Source[Order, NotUsed] = Source.fromGraph(new OrderSource)
   lazy private val order: Source[Order, Cancellable] = Source.tick(2.seconds, (scala.util.Random.nextInt(10) + 1).seconds, Order).map(_ => Order.create)
+    .wireTap(x => println(s"${x.count.value} pack(s) ordered [${"%010d".format(x.number.value)}]"))
 
   lazy private val packing: Flow[(Band, Pack), Seq[Pack], NotUsed] = Flow.fromGraph(new PackingFlow)
 
-  lazy private val serve: Sink[(Band, Pack), NotUsed] = Flow[(Band, Pack)].via(packing).map(x => println(s"serve ${x.size} pack(s) {${x.mkString(" ")}}")).to(Sink.ignore)
+  lazy private val serve: Sink[(Band, Pack), NotUsed] = Flow[(Band, Pack)].via(packing)
+    .wireTap(x => println(s"serve ${x.size} pack(s) {${x.mkString(" ")}}")).to(Sink.ignore)
 
   lazy private val checkout: Flow[Order, Band, NotUsed] = Flow[Order].mapConcat(x => TopBand(x) +: List.fill(x.count.value - 1)(NormalBand()))
 
