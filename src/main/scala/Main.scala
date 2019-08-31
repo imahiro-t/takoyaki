@@ -115,32 +115,6 @@ class PackingFlow extends GraphStage[FlowShape[(Band, Pack), Seq[Pack]]] {
     }
 }
 
-class QueuingFlow extends GraphStage[FlowShape[EmptyPack, Teppan]] {
-  val in: Inlet[EmptyPack] = Inlet("QueuingFlowIn")
-  val out: Outlet[Teppan] = Outlet("QueuingFlowOut")
-  override val shape: FlowShape[EmptyPack, Teppan] = FlowShape(in, out)
-  override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-    new GraphStageLogic(shape) {
-      private val queue: BufferQueue[EmptyPack] = BufferQueue[EmptyPack](Teppan.LANE_SIZE)
-      setHandler(out, new OutHandler {
-        override def onPull(): Unit = {
-          pull(in)
-        }
-      })
-      setHandler(in, new InHandler {
-        override def onPush(): Unit = {
-          val list = queue.add(grab(in))
-          if (queue.isComplete) {
-            push(out, Teppan(list))
-            queue.clear()
-          } else {
-            pull(in)
-          }
-        }
-      })
-    }
-}
-
 object Main extends App {
   implicit val system = ActorSystem("TakoyakiAS")
   implicit val materializer = ActorMaterializer()
@@ -158,8 +132,6 @@ object Main extends App {
   lazy private val prepareForFirstCook: Source[Seq[EmptyPack], NotUsed] = Source.single(Seq.fill(INIT_COOK_COUNT)(EmptyPack()))
 
   lazy private val prepareForCook: Flow[Order, Seq[EmptyPack], NotUsed] = Flow[Order].map(x => List.fill(x.count.value)(EmptyPack()))
-//    Flow[Order].mapConcat(x => List.fill(x.count.value)(EmptyPack())).via(new QueuingFlow())
-//    Flow[Order].mapConcat(x => List.fill(x.count.value)(EmptyPack())).via(Flow[EmptyPack].grouped(Teppan.LANE_SIZE).map(Teppan(_)))
 
   lazy private val fillTakoball: EmptyPack => Pack = emptyPack => {
     emptyPack.fill(Seq.fill(Pack.MAX_TAKOBALL_COUNT)(Takoball.create))
