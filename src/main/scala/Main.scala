@@ -29,10 +29,6 @@ object Pack {
 final case class EmptyPack() {
   def fill(takoballs: Seq[Takoball]): Pack = Pack(takoballs)
 }
-final case class Teppan(packs: Seq[EmptyPack])
-object Teppan {
-  val LANE_SIZE: Int = 4
-}
 trait Band
 final case class NormalBand() extends Band
 final case class TopBand(order: Order) extends Band
@@ -129,7 +125,7 @@ object Main extends App {
 
   lazy private val checkout: Flow[Order, Band, NotUsed] = Flow[Order].mapConcat(x => TopBand(x) +: List.fill(x.count.value - 1)(NormalBand()))
 
-  lazy private val INIT_COOK_COUNT = 3
+  lazy private val INIT_COOK_COUNT = 4
   lazy private val prepareForFirstCook: Source[Seq[EmptyPack], NotUsed] = Source.single(Seq.fill(INIT_COOK_COUNT)(EmptyPack()))
 
   lazy private val prepareForCook: Flow[Order, Seq[EmptyPack], NotUsed] = Flow[Order].map(x => List.fill(x.count.value)(EmptyPack()))
@@ -150,11 +146,12 @@ object Main extends App {
 
   lazy private val cook: Flow[Seq[EmptyPack], Pack, NotUsed] = Flow.fromGraph(GraphDSL.create() { implicit builder: GraphDSL.Builder[NotUsed] =>
     import GraphDSL.Implicits._
-    lazy val preparePack = builder.add(Flow[Seq[EmptyPack]].mapConcat(x => x.toList))
-    lazy val balance = builder.add(Balance[EmptyPack](Teppan.LANE_SIZE).async)
-    lazy val merge = builder.add(Merge[Pack](Teppan.LANE_SIZE))
+    lazy val LANE_SIZE = 4
+    lazy val preparePack = builder.add(Flow[Seq[EmptyPack]].mapConcat(_.toList))
+    lazy val balance = builder.add(Balance[EmptyPack](LANE_SIZE).async)
+    lazy val merge = builder.add(Merge[Pack](LANE_SIZE))
     preparePack ~> balance
-    for (i <- 1 to Teppan.LANE_SIZE) {
+    for (i <- 1 to LANE_SIZE) {
       balance ~> cookPerPack.async ~> merge
     }
     FlowShape(preparePack.in, merge.out)
